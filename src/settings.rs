@@ -1,12 +1,11 @@
 use colored::{ColoredString, Colorize};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    journals: HashMap<String, JournalConfig>,
     #[serde(flatten)]
     config: CommonConfig,
     version: String,
@@ -15,7 +14,6 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            journals: HashMap::default(),
             config: CommonConfig::default(),
             version: format!("v{}", env!("CARGO_PKG_VERSION")),
         }
@@ -33,11 +31,19 @@ struct CommonConfig {
     encrypt: Option<bool>,
     highlight: Option<bool>,
     indent_character: Option<char>,
-    journal: Option<String>,
+    #[serde(flatten)]
+    journal_config: Option<JournalConfigs>,
     linewrap: Option<LineWrapConfig>,
     tagsymbols: Option<String>,
     template: Option<TemplateConfig>,
     timeformat: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum JournalConfigs {
+    Journals(IndexMap<String, JournalConfig>),
+    Journal(Option<String>),
 }
 
 #[allow(dead_code)]
@@ -74,8 +80,8 @@ impl CommonConfig {
         self.indent_character = Some(indent_character);
         self
     }
-    fn journal(mut self, journal: String) -> Self {
-        self.journal = Some(journal);
+    fn journal_config(mut self, journals: JournalConfigs) -> Self {
+        self.journal_config = Some(journals);
         self
     }
     fn linewrap(mut self, linewrap: LineWrapConfig) -> Self {
@@ -107,7 +113,7 @@ impl Default for CommonConfig {
             encrypt: Some(false),
             highlight: Some(true),
             indent_character: Some('|'),
-            journal: None,
+            journal_config: None,
             linewrap: Some(LineWrapConfig::default()),
             tagsymbols: Some("#@".to_owned()),
             template: Some(TemplateConfig::default()),
@@ -229,9 +235,7 @@ impl Default for DisplayConfig {
 #[cfg(test)]
 mod test_config {
     use super::*;
-    use serde_yml;
-    const YAML_STR: &str = r#"
-colors:
+    const YAML_STR: &str = r#"colors:
   body: none
   date: black
   tags: yellow
@@ -265,5 +269,13 @@ version: v4.1
     fn test_ser_config() {
         let config = Settings::default();
         let _ = serde_yml::to_string(&config).unwrap();
+    }
+
+    #[test]
+    fn test_round_trip() {
+        let config: Settings = serde_yml::from_str(YAML_STR).unwrap();
+        let config_str = serde_yml::to_string(&config).unwrap();
+        eprintln!("{config:#?}");
+        assert_eq!(YAML_STR, config_str);
     }
 }
