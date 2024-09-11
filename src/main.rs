@@ -3,35 +3,13 @@ use clap::Parser;
 use config::Config;
 use directories::ProjectDirs;
 
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    entry: Vec<String>,
-
-    #[arg(long, action)]
-    edit: bool,
-
-    #[arg(long, action)]
-    delete: bool,
-
-    #[arg(long, action)]
-    short: bool,
-
-    #[arg(long)]
-    change_time: Option<String>,
-
-    #[arg(long)]
-    format: Option<String>,
-
-    #[arg(long)]
-    config_file: Option<String>,
-}
-
+mod cli;
 mod entry;
 mod error;
 mod journal;
 mod settings;
 
+use cli::Cli;
 
 fn main() {
     let cli = Cli::parse();
