@@ -83,7 +83,7 @@ impl Entry {
             .split_whitespace()
             // TODO: get tag chars from config
             .filter(|word| word.starts_with(&['#', '@']))
-            .map(|word| word.clone().to_owned())
+            .map(|word| word.to_owned())
             .collect::<Vec<String>>();
         println!("Parsing '{}' to datetime", time_str);
         // TODO: get strftime fmt from config
@@ -117,7 +117,8 @@ mod tests {
                 time: NaiveDateTime::new(assert_date, assert_time),
                 title: "Test entry.".to_owned(),
                 text: "This is a test entry".to_owned(),
-                starred: false
+                tags: vec![],
+                starred: false,
             },
             Entry::parse(&lines).unwrap()
         );

@@ -5,6 +5,8 @@ use directories::ProjectDirs;
 use std::error;
 use std::fmt;
 
+mod settings;
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
