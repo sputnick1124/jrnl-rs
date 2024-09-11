@@ -129,7 +129,7 @@ impl<'a> Settings {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct CommonConfig {
     colors: Option<ColorConfig>,
     default_hour: Option<u8>,
@@ -147,7 +147,7 @@ struct CommonConfig {
     timeformat: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 enum JournalConfigs {
     Journals(IndexMap<String, JournalConfig>),
@@ -235,7 +235,7 @@ impl Default for CommonConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 enum JournalConfig {
     Standard(String),
@@ -446,8 +446,28 @@ version: v4.1
     #[test]
     fn test_config_errors() {
         let settings = sample_settings();
-        if let Err(JrnlError(e)) = settings.journal_settings("foobar") {
-            assert_eq!(JrnlErrorKind::MissingJournalConfig, e);
+        let expected_missing = JrnlErrorKind::MissingJournalConfig;
+        let actual_missing = settings.journal_settings("foobar");
+        if let Err(e) = actual_missing {
+            assert_eq!(JrnlErrorKind::MissingJournalConfig, e.kind());
+        } else {
+            let kind = actual_missing.err().unwrap().kind();
+            panic!("expected {expected_missing}, got {kind}");
+        }
+
+        // make standalone config from subconfig
+        let (config, _) = settings.journal_settings("other").unwrap();
+        let invalid_settings = Settings {
+            config: config.clone(),
+            ..Default::default()
+        };
+        let expected_toplevel = JrnlErrorKind::TopLevelJournalConfig;
+        let actual_toplevel = invalid_settings.journal_settings("other");
+        if let Err(e) = actual_toplevel {
+            assert_eq!(expected_toplevel, e.kind());
+        } else {
+            let kind = actual_toplevel.err().unwrap().kind();
+            panic!("expected {expected_toplevel}, got {kind}");
         }
     }
 }
