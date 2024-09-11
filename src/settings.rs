@@ -1,7 +1,13 @@
 use colored::{ColoredString, Colorize};
+#[allow(unused_imports)]
+use config::{Config, ConfigError, Environment, File};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+
+use crate::error::{JrnlError, JrnlErrorKind, Result};
+#[allow(unused_imports)]
+use crate::journal;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -17,6 +23,108 @@ impl Default for Settings {
             config: CommonConfig::default(),
             version: format!("v{}", env!("CARGO_PKG_VERSION")),
         }
+    }
+}
+
+#[allow(dead_code)]
+impl<'a> Settings {
+    fn journal_settings(&'a self, journal_name: &str) -> Result<(&'a CommonConfig, &'a str)> {
+        self.config
+            .journal_config
+            .as_ref()
+            .map(|configs| match configs {
+                JournalConfigs::Journals(journals) => journals
+                    .get(journal_name)
+                    .map(|journal| {
+                        let journal_file = journal.journal_file();
+                        match journal {
+                            JournalConfig::Override(config) => journal_file.map(|p| (config, p)),
+                            JournalConfig::Standard(_) => journal_file.map(|p| (&self.config, p)),
+                        }
+                    })
+                    .ok_or(JrnlError(JrnlErrorKind::MissingJournalConfig))?,
+                _ => Err(JrnlError(JrnlErrorKind::TopLevelJournalConfig))?,
+            })
+            .ok_or(JrnlError(JrnlErrorKind::MissingJournalConfig))?
+    }
+    fn default_hour(&self, journal_name: &str) -> Result<u8> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config
+            .default_hour
+            .or(self.config.default_hour)
+            .unwrap_or_default())
+    }
+    fn default_minute(&self, journal_name: &str) -> Result<u8> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config
+            .default_minute
+            .or(self.config.default_minute)
+            .unwrap_or_default())
+    }
+    fn colors(&self, journal_name: &str) -> Result<ColorConfig> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config.colors.or(self.config.colors).unwrap_or_default())
+    }
+    fn display_format(&self, journal_name: &str) -> Result<DisplayConfig> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config
+            .display_format
+            .or(self.config.display_format)
+            .unwrap_or_default())
+    }
+    fn editor(&self, journal_name: &str) -> Result<String> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        config
+            .editor
+            .clone()
+            .or(self.config.editor.clone())
+            .ok_or(JrnlError(JrnlErrorKind::InvalidJrnlOverrideConfig))
+    }
+    fn encrypt(&self, journal_name: &str) -> Result<bool> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config.encrypt.or(self.config.encrypt).unwrap_or_default())
+    }
+    fn highlight(&self, journal_name: &str) -> Result<bool> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config
+            .highlight
+            .or(self.config.highlight)
+            .unwrap_or_default())
+    }
+    fn indent_character(&self, journal_name: &str) -> Result<char> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config
+            .indent_character
+            .or(self.config.indent_character)
+            .unwrap_or_default())
+    }
+    fn linewrap(&self, journal_name: &str) -> Result<LineWrapConfig> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config.linewrap.or(self.config.linewrap).unwrap_or_default())
+    }
+    fn tagsymbols(&self, journal_name: &str) -> Result<String> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config
+            .tagsymbols
+            .clone()
+            .or(self.config.tagsymbols.clone())
+            .unwrap_or_default())
+    }
+    fn template(&self, journal_name: &str) -> Result<TemplateConfig> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config
+            .template
+            .clone()
+            .or(self.config.template.clone())
+            .unwrap_or_default())
+    }
+    fn timeformat(&self, journal_name: &str) -> Result<String> {
+        let (config, _) = self.journal_settings(journal_name)?;
+        Ok(config
+            .timeformat
+            .clone()
+            .or(self.config.timeformat.clone())
+            .unwrap_or_default())
     }
 }
 
@@ -43,8 +151,13 @@ struct CommonConfig {
 #[serde(rename_all = "lowercase")]
 enum JournalConfigs {
     Journals(IndexMap<String, JournalConfig>),
-    Journal(Option<String>),
+    Journal(String),
 }
+
+// impl JournalConfigs {
+//     fn add_journal(journal_name: &str) {
+//     }
+// }
 
 #[allow(dead_code)]
 impl CommonConfig {
@@ -129,13 +242,29 @@ enum JournalConfig {
     Override(CommonConfig),
 }
 
+impl JournalConfig {
+    fn journal_file(&self) -> Result<&str> {
+        match self {
+            Self::Standard(journal_file) => Ok(journal_file),
+            Self::Override(config) => {
+                if let Some(JournalConfigs::Journal(journal_file)) = config.journal_config.as_ref()
+                {
+                    Ok(journal_file)
+                } else {
+                    Err(JrnlError(JrnlErrorKind::InvalidJrnlOverrideConfig))
+                }
+            }
+        }
+    }
+}
+
 impl Default for JournalConfig {
     fn default() -> Self {
         Self::Standard("".to_owned())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 enum TemplateConfig {
     Empty(bool),
@@ -148,7 +277,7 @@ impl Default for TemplateConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 #[serde(rename_all = "lowercase")]
 enum LineWrapConfig {
     Auto,
@@ -211,7 +340,7 @@ impl TextColor {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 #[serde(rename_all = "lowercase")]
 enum DisplayConfig {
     Boxed,
@@ -260,6 +389,28 @@ timeformat: '%F %r'
 version: v4.1
 "#;
 
+    fn sample_settings() -> Settings {
+        let sub_config = JournalConfig::Override(
+            CommonConfig::default()
+                .default_hour(4)
+                .default_minute(20)
+                .encrypt(true)
+                .journal_config(JournalConfigs::Journal("/path/to/other.txt".to_owned())),
+        );
+        let mut journal_configs = IndexMap::new();
+        journal_configs.insert(
+            "default".to_owned(),
+            JournalConfig::Standard("/path/to/default.txt".to_owned()),
+        );
+        journal_configs.insert("other".to_owned(), sub_config);
+        let journal_config = JournalConfigs::Journals(journal_configs);
+        let config = CommonConfig::default().journal_config(journal_config);
+        Settings {
+            config,
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn test_deser_config() {
         let _: Settings = serde_yml::from_str(YAML_STR).unwrap();
@@ -277,5 +428,26 @@ version: v4.1
         let config_str = serde_yml::to_string(&config).unwrap();
         eprintln!("{config:#?}");
         assert_eq!(YAML_STR, config_str);
+    }
+
+    #[test]
+    fn test_toplevel_defaults() {
+        let settings = sample_settings();
+        assert_eq!(settings.default_hour("default").unwrap(), 9);
+        assert_eq!(settings.default_hour("other").unwrap(), 4);
+        assert_eq!(settings.default_minute("default").unwrap(), 0);
+        assert_eq!(settings.default_minute("other").unwrap(), 20);
+        assert!(!settings.encrypt("default").unwrap());
+        assert!(settings.encrypt("other").unwrap());
+        assert!(settings.highlight("default").unwrap());
+        assert!(settings.highlight("other").unwrap());
+    }
+
+    #[test]
+    fn test_config_errors() {
+        let settings = sample_settings();
+        if let Err(JrnlError(e)) = settings.journal_settings("foobar") {
+            assert_eq!(JrnlErrorKind::MissingJournalConfig, e);
+        }
     }
 }

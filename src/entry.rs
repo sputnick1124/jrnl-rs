@@ -3,7 +3,9 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::iter::Peekable;
 
-use crate::{JrnlError, JrnlErrorKind, Result};
+use crate::error::{JrnlError, JrnlErrorKind};
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct Entries<I>
 where

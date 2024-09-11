@@ -2,10 +2,6 @@
 use clap::Parser;
 use config::Config;
 use directories::ProjectDirs;
-use std::error;
-use std::fmt;
-
-mod settings;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -32,26 +28,10 @@ struct Cli {
 }
 
 mod entry;
+mod error;
 mod journal;
+mod settings;
 
-type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
-
-#[derive(Debug)]
-enum JrnlErrorKind {
-    EmptyEntry,
-    InvalidTitleLine,
-}
-
-#[derive(Debug)]
-struct JrnlError(JrnlErrorKind);
-
-impl fmt::Display for JrnlError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl error::Error for JrnlError {}
 
 fn main() {
     let cli = Cli::parse();
@@ -75,7 +55,7 @@ fn main() {
 
     let journal_name: String;
     let journal_file: String;
-    if let Some(journal_table) = settings.get_table("journals").ok() {
+    if let Ok(journal_table) = settings.get_table("journals") {
         (journal_name, journal_file) = match cli.entry.get(0) {
             Some(journal_name) if journal_table.contains_key(journal_name) => (
                 journal_name.to_owned(),
