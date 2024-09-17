@@ -44,6 +44,40 @@ impl<'a> Settings {
     pub fn journal_file(&'a self, journal_name: &str) -> Result<&'a str> {
         self.journal_settings(journal_name).map(|(_, f)| f)
     }
+    pub fn get_journals(&'a self) -> JournalConfigs {
+        let journal_map = self
+            .config
+            .journal_config
+            .clone()
+            .map(|configs| match configs {
+                JournalConfigs::Journals(journals) => journals
+                    .iter()
+                    .map(|(name, config)| match config {
+                        JournalConfig::Standard(path) => {
+                            (name.clone(), JournalConfig::Standard(path.to_string()))
+                        }
+                        JournalConfig::Override(CommonConfig {
+                            journal_config: Some(JournalConfigs::Journal(path)),
+                            ..
+                        }) => (
+                            name.clone(),
+                            JournalConfig::Override(
+                                CommonConfig::new()
+                                    .journal_config(JournalConfigs::Journal(path.to_string())),
+                            ),
+                        ),
+                        _ => unreachable!("invalid configuration"),
+                    })
+                    .collect(),
+                JournalConfigs::Journal(path) => {
+                    let mut map = IndexMap::new();
+                    map.insert(String::new(), JournalConfig::Standard(path));
+                    map
+                }
+            })
+            .unwrap();
+        JournalConfigs::Journals(journal_map)
+    }
     fn journal_settings(&'a self, journal_name: &str) -> Result<(&'a CommonConfig, &'a str)> {
         self.config
             .journal_config
@@ -165,28 +199,16 @@ pub struct CommonConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
-enum JournalConfigs {
+pub(crate) enum JournalConfigs {
     Journals(IndexMap<String, JournalConfig>),
     Journal(String),
 }
 
 impl JournalConfigs {
     fn with_journal(journal_name: &str, path: &str) -> Self {
-        let journal_config = JournalConfig::Override(CommonConfig {
-            default_hour: None,
-            default_minute: None,
-            colors: None,
-            display_format: None,
-            editor: None,
-            encrypt: None,
-            highlight: None,
-            indent_character: None,
-            journal_config: Some(JournalConfigs::Journal(path.to_string())),
-            linewrap: None,
-            tagsymbols: None,
-            template: None,
-            timeformat: None,
-        });
+        let journal_config = JournalConfig::Override(
+            CommonConfig::new().journal_config(JournalConfigs::Journal(path.to_string())),
+        );
         let mut map = IndexMap::new();
         map.insert(journal_name.to_string(), journal_config);
         Self::Journals(map)
@@ -195,6 +217,23 @@ impl JournalConfigs {
 
 #[allow(dead_code)]
 impl CommonConfig {
+    pub fn new() -> Self {
+        Self {
+            default_hour: None,
+            default_minute: None,
+            colors: None,
+            display_format: None,
+            editor: None,
+            encrypt: None,
+            highlight: None,
+            indent_character: None,
+            journal_config: None,
+            linewrap: None,
+            tagsymbols: None,
+            template: None,
+            timeformat: None,
+        }
+    }
     fn default_hour(mut self, default_hour: i8) -> Self {
         self.default_hour = Some(default_hour);
         self

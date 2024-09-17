@@ -214,7 +214,7 @@ pub enum Commands {
 #[derive(Debug, Clone, Args)]
 pub struct ListArgs {
     #[arg(long, required = false)]
-    format: Option<ListFormat>,
+    pub(crate) format: Option<ListFormat>,
 }
 
 #[derive(Debug, Clone, ValueEnum)]
