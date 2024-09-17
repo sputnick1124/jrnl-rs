@@ -1,9 +1,10 @@
-use colored::{ColoredString, Colorize};
+use clap::ValueEnum;
 #[allow(unused_imports)]
 use config::{Config, ConfigError, Environment, File};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+use termcolor::Color;
 
 use crate::error::{JrnlError, JrnlErrorKind, Result};
 #[allow(unused_imports)]
@@ -28,6 +29,15 @@ impl Default for Settings {
 
 #[allow(dead_code)]
 impl<'a> Settings {
+    pub fn configure(file: &str) -> std::result::Result<Self, ConfigError> {
+        let s = Config::builder()
+            .add_source(File::with_name(file))
+            .build()?;
+        s.try_deserialize()
+    }
+    pub fn journal_file(&'a self, journal_name: &str) -> Result<&'a str> {
+        self.journal_settings(journal_name).map(|(_, f)| f)
+    }
     fn journal_settings(&'a self, journal_name: &str) -> Result<(&'a CommonConfig, &'a str)> {
         self.config
             .journal_config
@@ -47,32 +57,32 @@ impl<'a> Settings {
             })
             .ok_or(JrnlError(JrnlErrorKind::MissingJournalConfig))?
     }
-    fn default_hour(&self, journal_name: &str) -> Result<u8> {
+    pub fn default_hour(&self, journal_name: &str) -> Result<u8> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .default_hour
             .or(self.config.default_hour)
             .unwrap_or_default())
     }
-    fn default_minute(&self, journal_name: &str) -> Result<u8> {
+    pub fn default_minute(&self, journal_name: &str) -> Result<u8> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .default_minute
             .or(self.config.default_minute)
             .unwrap_or_default())
     }
-    fn colors(&self, journal_name: &str) -> Result<ColorConfig> {
+    pub fn colors(&self, journal_name: &str) -> Result<ColorConfig> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config.colors.or(self.config.colors).unwrap_or_default())
     }
-    fn display_format(&self, journal_name: &str) -> Result<DisplayConfig> {
+    pub fn display_format(&self, journal_name: &str) -> Result<DisplayConfig> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .display_format
             .or(self.config.display_format)
             .unwrap_or_default())
     }
-    fn editor(&self, journal_name: &str) -> Result<String> {
+    pub fn editor(&self, journal_name: &str) -> Result<String> {
         let (config, _) = self.journal_settings(journal_name)?;
         config
             .editor
@@ -80,29 +90,29 @@ impl<'a> Settings {
             .or(self.config.editor.clone())
             .ok_or(JrnlError(JrnlErrorKind::InvalidJrnlOverrideConfig))
     }
-    fn encrypt(&self, journal_name: &str) -> Result<bool> {
+    pub fn encrypt(&self, journal_name: &str) -> Result<bool> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config.encrypt.or(self.config.encrypt).unwrap_or_default())
     }
-    fn highlight(&self, journal_name: &str) -> Result<bool> {
+    pub fn highlight(&self, journal_name: &str) -> Result<bool> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .highlight
             .or(self.config.highlight)
             .unwrap_or_default())
     }
-    fn indent_character(&self, journal_name: &str) -> Result<char> {
+    pub fn indent_character(&self, journal_name: &str) -> Result<char> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .indent_character
             .or(self.config.indent_character)
             .unwrap_or_default())
     }
-    fn linewrap(&self, journal_name: &str) -> Result<LineWrapConfig> {
+    pub fn linewrap(&self, journal_name: &str) -> Result<LineWrapConfig> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config.linewrap.or(self.config.linewrap).unwrap_or_default())
     }
-    fn tagsymbols(&self, journal_name: &str) -> Result<String> {
+    pub fn tagsymbols(&self, journal_name: &str) -> Result<String> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .tagsymbols
@@ -110,7 +120,7 @@ impl<'a> Settings {
             .or(self.config.tagsymbols.clone())
             .unwrap_or_default())
     }
-    fn template(&self, journal_name: &str) -> Result<TemplateConfig> {
+    pub fn template(&self, journal_name: &str) -> Result<TemplateConfig> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .template
@@ -118,7 +128,7 @@ impl<'a> Settings {
             .or(self.config.template.clone())
             .unwrap_or_default())
     }
-    fn timeformat(&self, journal_name: &str) -> Result<String> {
+    pub fn timeformat(&self, journal_name: &str) -> Result<String> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .timeformat
@@ -130,7 +140,7 @@ impl<'a> Settings {
 
 #[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct CommonConfig {
+pub struct CommonConfig {
     colors: Option<ColorConfig>,
     default_hour: Option<u8>,
     default_minute: Option<u8>,
@@ -266,7 +276,7 @@ impl Default for JournalConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-enum TemplateConfig {
+pub enum TemplateConfig {
     Empty(bool),
     Path(String),
 }
@@ -279,7 +289,7 @@ impl Default for TemplateConfig {
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 #[serde(rename_all = "lowercase")]
-enum LineWrapConfig {
+pub enum LineWrapConfig {
     Auto,
     #[serde(untagged)]
     Columns(u16),
@@ -292,7 +302,7 @@ impl Default for LineWrapConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
-struct ColorConfig {
+pub struct ColorConfig {
     body: TextColor,
     date: TextColor,
     tags: TextColor,
@@ -311,7 +321,7 @@ impl Default for ColorConfig {
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 #[serde(rename_all = "lowercase")]
-enum TextColor {
+pub enum TextColor {
     None,
     Black,
     Red,
@@ -325,24 +335,24 @@ enum TextColor {
 
 impl TextColor {
     #[allow(dead_code)]
-    fn colorize(&self, s: &str) -> ColoredString {
+    pub fn get_termcolor(&self) -> Option<Color> {
         match self {
-            Self::None => s.normal(),
-            Self::Black => s.black(),
-            Self::Red => s.red(),
-            Self::Green => s.green(),
-            Self::Yellow => s.yellow(),
-            Self::Blue => s.blue(),
-            Self::Magenta => s.magenta(),
-            Self::Cyan => s.cyan(),
-            Self::White => s.white(),
+            Self::None => None,
+            Self::Black => Some(Color::Black),
+            Self::Red => Some(Color::Red),
+            Self::Green => Some(Color::Green),
+            Self::Yellow => Some(Color::Yellow),
+            Self::Blue => Some(Color::Blue),
+            Self::Magenta => Some(Color::Magenta),
+            Self::Cyan => Some(Color::Cyan),
+            Self::White => Some(Color::White),
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, ValueEnum)]
 #[serde(rename_all = "lowercase")]
-enum DisplayConfig {
+pub enum DisplayConfig {
     Boxed,
     Dates,
     Json,
