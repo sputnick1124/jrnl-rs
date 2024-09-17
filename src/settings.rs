@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use termcolor::Color;
 
+use crate::cli::Cli;
 use crate::error::{JrnlError, JrnlErrorKind, Result};
 #[allow(unused_imports)]
 use crate::journal;
@@ -29,11 +30,16 @@ impl Default for Settings {
 
 #[allow(dead_code)]
 impl<'a> Settings {
-    pub fn configure(file: &str) -> std::result::Result<Self, ConfigError> {
+    pub fn configure(file: &str, cli: Cli) -> std::result::Result<Self, ConfigError> {
         let s = Config::builder()
             .add_source(File::with_name(file))
+            .add_source(cli)
             .build()?;
         s.try_deserialize()
+    }
+    pub fn with_journal(mut self, journal_name: &str, journal_path: &str) -> Self {
+        self.config.journal_config = Some(JournalConfigs::with_journal(journal_name, journal_path));
+        self
     }
     pub fn journal_file(&'a self, journal_name: &str) -> Result<&'a str> {
         self.journal_settings(journal_name).map(|(_, f)| f)
@@ -57,14 +63,14 @@ impl<'a> Settings {
             })
             .ok_or(JrnlError(JrnlErrorKind::MissingJournalConfig))?
     }
-    pub fn default_hour(&self, journal_name: &str) -> Result<u8> {
+    pub fn default_hour(&self, journal_name: &str) -> Result<i8> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .default_hour
             .or(self.config.default_hour)
             .unwrap_or_default())
     }
-    pub fn default_minute(&self, journal_name: &str) -> Result<u8> {
+    pub fn default_minute(&self, journal_name: &str) -> Result<i8> {
         let (config, _) = self.journal_settings(journal_name)?;
         Ok(config
             .default_minute
@@ -142,8 +148,8 @@ impl<'a> Settings {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommonConfig {
     colors: Option<ColorConfig>,
-    default_hour: Option<u8>,
-    default_minute: Option<u8>,
+    default_hour: Option<i8>,
+    default_minute: Option<i8>,
     display_format: Option<DisplayConfig>,
     editor: Option<String>,
     encrypt: Option<bool>,
@@ -164,18 +170,36 @@ enum JournalConfigs {
     Journal(String),
 }
 
-// impl JournalConfigs {
-//     fn add_journal(journal_name: &str) {
-//     }
-// }
+impl JournalConfigs {
+    fn with_journal(journal_name: &str, path: &str) -> Self {
+        let journal_config = JournalConfig::Override(CommonConfig {
+            default_hour: None,
+            default_minute: None,
+            colors: None,
+            display_format: None,
+            editor: None,
+            encrypt: None,
+            highlight: None,
+            indent_character: None,
+            journal_config: Some(JournalConfigs::Journal(path.to_string())),
+            linewrap: None,
+            tagsymbols: None,
+            template: None,
+            timeformat: None,
+        });
+        let mut map = IndexMap::new();
+        map.insert(journal_name.to_string(), journal_config);
+        Self::Journals(map)
+    }
+}
 
 #[allow(dead_code)]
 impl CommonConfig {
-    fn default_hour(mut self, default_hour: u8) -> Self {
+    fn default_hour(mut self, default_hour: i8) -> Self {
         self.default_hour = Some(default_hour);
         self
     }
-    fn default_minute(mut self, default_minute: u8) -> Self {
+    fn default_minute(mut self, default_minute: i8) -> Self {
         self.default_minute = Some(default_minute);
         self
     }
@@ -292,7 +316,7 @@ impl Default for TemplateConfig {
 pub enum LineWrapConfig {
     Auto,
     #[serde(untagged)]
-    Columns(u16),
+    Columns(i16),
 }
 
 impl Default for LineWrapConfig {
@@ -356,12 +380,15 @@ pub enum DisplayConfig {
     Boxed,
     Dates,
     Json,
+    #[serde(alias = "md")]
     Markdown,
     Pretty,
     Short,
     Tags,
+    #[serde(alias = "txt")]
     Text,
     Xml,
+    #[serde(alias = "yml")]
     Yaml,
 }
 

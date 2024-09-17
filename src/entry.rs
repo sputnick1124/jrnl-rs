@@ -60,7 +60,6 @@ pub struct Entry {
 
 impl Entry {
     pub fn parse(raw_text: &[&str]) -> Result<Self> {
-        println!("received entry chunk:\n{:?}", raw_text);
         lazy_static! {
             static ref TITLE_RE: Regex =
                 Regex::new(r"^[[:blank:]]*\[(?P<time>[^\]]+)\]\s*(?P<title>.*$)").unwrap();
@@ -87,10 +86,8 @@ impl Entry {
             .filter(|word| word.starts_with(&['#', '@']))
             .map(|word| word.to_owned())
             .collect::<Vec<String>>();
-        println!("Parsing '{}' to datetime", time_str);
         // TODO: get strftime fmt from config
         let time = NaiveDateTime::parse_from_str(time_str, "%F %r")?.into();
-        println!("parsed time: {:?}", time);
         Ok(Entry {
             time,
             title,
