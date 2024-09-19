@@ -1,5 +1,4 @@
 use clap::ValueEnum;
-#[allow(unused_imports)]
 use config::{Config, ConfigError, Environment, File};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -8,8 +7,6 @@ use termcolor::Color;
 
 use crate::cli::Cli;
 use crate::error::{JrnlError, JrnlErrorKind, Result};
-#[allow(unused_imports)]
-use crate::journal;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -32,6 +29,7 @@ impl Default for Settings {
 impl<'a> Settings {
     pub fn configure(file: &str, cli: Cli) -> std::result::Result<Self, ConfigError> {
         let s = Config::builder()
+            .add_source(Environment::default())
             .add_source(File::with_name(file))
             .add_source(cli)
             .build()?;
@@ -310,13 +308,13 @@ impl Default for CommonConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-enum JournalConfig {
+pub(crate) enum JournalConfig {
     Standard(String),
     Override(CommonConfig),
 }
 
 impl JournalConfig {
-    fn journal_file(&self) -> Result<&str> {
+    pub fn journal_file(&self) -> Result<&str> {
         match self {
             Self::Standard(journal_file) => Ok(journal_file),
             Self::Override(config) => {

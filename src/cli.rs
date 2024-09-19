@@ -21,6 +21,7 @@ pub struct Cli {
         long,
         num_args = 2,
         value_names = ["CONFIG_KEY", "CONFIG_VALUE"],
+        global = true,
         help = r#" Override configured key-value pair with CONFIG_KV_PAIR
 for this command invocation only.
 Examples:
@@ -33,6 +34,7 @@ jrnl --config-override colors.body blue --config-override colors.title green"#)]
     #[arg(
         long,
         value_name = "CONFIG_FILE_PATH",
+        global = true,
         help = r#"Overrides default (created when first installed) config
 file for this command only
 Examples:

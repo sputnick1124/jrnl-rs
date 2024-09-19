@@ -1,19 +1,17 @@
 // use std::path::PathBuf;
 
-use crate::cli::{Cli, ListArgs, ListFormat};
+use crate::cli::{ListArgs, ListFormat};
 use crate::settings::{JournalConfigs, Settings};
 use serde_json::json;
 use serde_yml::Value;
 
-pub fn list(args: &ListArgs, cli: &Cli, settings: &Settings, config_file: &str) {
+pub fn list(args: &ListArgs, settings: &Settings, config_file: &str) {
     let journal_configs = settings.get_journals();
-    let config_file = config_file.clone();
 
-    // if let Some(_journal_name) = cli.journal.clone() {}
     match args.format {
         Some(ListFormat::Json) => list_json(&journal_configs, config_file),
         Some(ListFormat::Yaml) => list_yaml(&journal_configs, config_file),
-        None => todo!(),
+        None => list_plain(&journal_configs, config_file),
     }
 }
 
@@ -35,7 +33,16 @@ fn list_yaml(journal_map: &JournalConfigs, config_file: &str) {
     if let Value::Tagged(val) = journal_value {
         map.insert(Value::String(val.tag.string.into()), val.value);
     }
-    let mut value = serde_yml::Value::Mapping(map);
-    // value.apply_merge();
+    let value = serde_yml::Value::Mapping(map);
     println!("{}", serde_yml::to_string(&value).unwrap())
+}
+
+fn list_plain(journal_map: &JournalConfigs, config_file: &str) {
+    println!("Journals defined in config ({config_file})");
+    if let JournalConfigs::Journals(map) = journal_map {
+        for (name, cfg) in map {
+            let file = cfg.journal_file().expect("unexpected path to journal");
+            println!(" * {name} -> {file}");
+        }
+    }
 }
